@@ -1,8 +1,9 @@
 # python submodules/evaluation-pipeline-2024/finetune_classification.py --model_name_or_path $MODEL_PATH_FULL --output_dir results/finetune/$model_basename/$task/ --train_file evaluation_data/babylm_eval/glue_filtered/$TRAIN_NAME.train.jsonl --validation_file evaluation_data/babylm_eval/glue_filtered/$VALID_NAME.valid.jsonl --do_train $DO_TRAIN  --do_eval --do_predict  --use_fast_tokenizer False --max_seq_length 128 --per_device_train_batch_size 64 --learning_rate 5e-5 --num_train_epochs 10 --patience 3 --evaluation_strategy epoch --save_strategy epoch --overwrite_output_dir --trust_remote_code  --seed 12 --use_cpu True
 
+import json
 import os
 import sys
-import json
+
 import wandb
 
 sys.path.append("submodules/evaluation-pipeline-2024")
@@ -10,6 +11,19 @@ sys.path.append("submodules/evaluation-pipeline-2024")
 import finetune_classification
 
 TASKS = ["boolq", "cola", "mnli", "mnli-mm", "mrpc", "multirc", "qnli", "qqp", "rte", "sst2", "wsc"]
+TASK_METRICS = {
+    "boolq": "eval_accuracy",
+    "cola": "eval_mcc",
+    "mnli": "eval_accuracy",
+    "mnli-mm": "eval_accuracy",
+    "mrpc": "eval_f1",
+    "multirc": "eval_accuracy",
+    "qnli": "eval_accuracy",
+    "qqp": "eval_f1",
+    "rte": "eval_accuracy",
+    "sst2": "eval_accuracy",
+    "wsc": "eval_accuracy",
+}
 
 
 def main():
@@ -81,12 +95,11 @@ def main():
         with open(out_dir + "eval_results.json", "r") as f:
             results = json.load(f)
 
-        if "eval_accuracy" in results:
-            task_results[f"eval/glue_{task}_accuracy"] = results["eval_accuracy"]
-        if "eval_f1" in results:
-            task_results[f"eval/glue_{task}_f1"] = results["eval_f1"]
-
+        task_results[f"eval/glue_{task}"] = results[TASK_METRICS[task]]
         wandb.finish()
+
+    glue_macro = sum([task_results[f"eval/glue_{task}"] for task in TASKS]) / len(TASKS)
+    task_results["eval/glue_macro"] = glue_macro
 
     print("Full task results:")
     print(task_results)

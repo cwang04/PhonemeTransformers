@@ -6,7 +6,7 @@ defaults:
   - override /dataset: babylm_strict_text
 
 dataset:
-  subconfig: 'strict_small'
+  subconfig: 'strict'
 
 data_preprocessing:
   max_input_length: 128
@@ -14,7 +14,7 @@ data_preprocessing:
   remove_word_boundaries: False
 
 experiment:
-  group: babylm-small
+  group: babylm2
   evaluate_babyslm: True
   evaluate_segmentation: False
   blimp_tasks: 'blimp_filtered,blimp_supplement'
