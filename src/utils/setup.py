@@ -1,17 +1,17 @@
 """ Utilities for setting up experiments from config """
 
-import datasets
 import logging
-import numpy as np
-import random
 import os
-import torch
-import wandb
-
-from transformers import PreTrainedTokenizer, AutoTokenizer, PreTrainedTokenizerFast
+import random
 from typing import Optional, Union
-from omegaconf import OmegaConf
 
+import datasets
+import numpy as np
+import torch
+from omegaconf import OmegaConf
+from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
+
+import wandb
 from src import config
 
 # A logger for this file
@@ -54,6 +54,23 @@ def load_dataset(
         token=os.environ["HF_READ_TOKEN"],
     )
 
+    # If dataset has no 'valid' split, create it
+    if "valid" not in dataset.keys():
+        logger.info("Creating validation split of 10,000 examples...")
+        # Create the validation split by sampling evenly from the train dataset
+        num_valid_examples = 10_000
+        num_train_examples = len(dataset["train"])
+        valid_indices = np.linspace(0, num_train_examples, num_valid_examples, endpoint=False, dtype=int)
+        valid_indices = valid_indices % num_train_examples
+        valid_indices = np.sort(valid_indices)
+        dataset["valid"] = dataset["train"].select(valid_indices)
+        if torch.cuda.is_available():
+            dataset["train"] = dataset["train"].filter(lambda x: x not in dataset["valid"], num_proc=64)
+        else:
+            indices_to_keep = [i for i in range(len(dataset["train"])) if i not in valid_indices]
+            dataset["train"] = dataset["train"].select(indices_to_keep)
+        logger.info("Succesfully created validation split")
+
     # Drop rows where target_child_age is none or is larger than the max_age
     if cfg.max_age is not None:
         if "target_child_age" not in dataset["train"].column_names:
@@ -62,6 +79,14 @@ def load_dataset(
             lambda x: x["target_child_age"] is not None and x["target_child_age"] <= cfg.max_age,
             num_proc=(64 if torch.cuda.is_available() else 1),
         )
+        logger.info(f"Filtered dataset to only include examples with target_child_age <= {cfg.max_age}")
+
+    # Drop rows where is_child is True
+    if cfg.remove_child_utterances is not None and cfg.remove_child_utterances:
+        if "is_child" not in dataset["train"].column_names:
+            raise ValueError(f"remove_child_utterances set to {cfg.remove_child_utterances} but dataset does not contain is_child column")
+        dataset = dataset.filter(lambda x: x["is_child"] is False, num_proc=(64 if torch.cuda.is_available() else 1))
+        logger.info("Filtered dataset to only include examples where is_child is False")
 
     dataset = dataset.remove_columns(set(dataset["train"].column_names) - set([cfg.text_column]))
 

@@ -101,13 +101,13 @@ class DataPreprocessor(object):
         self.utterance_boundary_token = tokenizer.eos_token
         self.get_word_boundaries = get_word_boundaries
         if self.get_word_boundaries or self.remove_word_boundaries:
-            if "WORD_BOUNDARY" in tokenizer.special_tokens_map:
+            if "WORD_BOUNDARY" in tokenizer.get_added_vocab():
                 self.word_boundary_token = tokenizer.convert_tokens_to_ids("WORD_BOUNDARY")
-            elif "W" in tokenizer.special_tokens_map:
+            elif "W" in tokenizer.get_added_vocab():
                 self.word_boundary_token = tokenizer.convert_tokens_to_ids("W")
             else:
                 raise ValueError(
-                    "Tokenizer does not contain the word boundary token (should be 'W' or 'WORD_BOUNDARY' in special tokens map). Cannot extract or remove word boundaries."
+                    "Tokenizer does not contain the word boundary token (should be 'W' or 'WORD_BOUNDARY' in added tokens). Cannot extract or remove word boundaries."
                 )
 
     def __call__(self, examples):

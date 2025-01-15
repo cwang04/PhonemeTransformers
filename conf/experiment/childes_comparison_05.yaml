@@ -1,0 +1,25 @@
+# @package _global_
+defaults:
+  - base_experiment
+  - override /model: ??? # Must provide model
+
+experiment:
+  group: childes-size-english
+  evaluate_babyslm: True
+  evaluate_segmentation: True
+
+data_preprocessing:
+  subsample_type: 'tokens'
+  max_input_length: 128
+  join_utts: "static"
+  remove_word_boundaries: True
+
+model:
+  model_kwargs: {
+    "resid_pdrop" : 0.5,
+    "embd_pdrop" : 0.5,
+    "attn_pdrop" : 0.5,
+  }
+
+trainer:
+  save_steps: 50_000
