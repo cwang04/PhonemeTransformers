@@ -6,12 +6,12 @@ import os
 # config-related imports
 import hydra
 import torch
-from omegaconf import OmegaConf
 
 # training pipeline imports
 from hydra.core.config_store import ConfigStore
+from omegaconf import OmegaConf
 from transformers.data import DataCollatorForLanguageModeling
-from transformers.trainer import TrainingArguments, TrainerState
+from transformers.trainer import TrainerState, TrainingArguments
 
 # wandb for logging metrics
 import wandb
@@ -52,8 +52,6 @@ def check_and_set_environment_variables(cfg: TransformerSegmentationConfig) -> N
         assert (
             "WANDB_ENTITY" in os.environ
         ), "WANDB_ENTITY needs to be set as an environment variable if not running in offline mode. Check .env file and source it if necessary."
-        if cfg.experiment.resume_checkpoint_path and cfg.experiment.resume_run_id is None:
-            raise RuntimeError("resume_run_id must be set if resume_checkpoint_path is set")
 
     # Disable parallelism in tokenizers to avoid issues with multiprocessing
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -61,6 +59,20 @@ def check_and_set_environment_variables(cfg: TransformerSegmentationConfig) -> N
 
 def check_config(cfg: TransformerSegmentationConfig) -> None:
     """Infer missing config values (checkpoint path and/or experiment name) and check if keys are missing"""
+
+    # Infer resume_run_id if checkpoint path is provided
+    if cfg.experiment.resume_checkpoint_path and not cfg.experiment.resume_run_id:
+        if "name" not in cfg.experiment:
+            cfg.experiment.name = cfg.experiment.resume_checkpoint_path.split("/")[-2]
+            logger.warning(f"experiment.name not set, infering {cfg.experiment.name} from resume_checkpoint_path.")
+        wandb_entity = os.environ.get("WANDB_ENTITY")
+        api = wandb.Api()
+        runs = api.runs(f"{wandb_entity}/{cfg.experiment.group}")
+        for run in runs:
+            if run.name == cfg.experiment.name:
+                cfg.experiment.resume_run_id = run.id
+                logger.info(f"resume_run_id not set, loaded {cfg.experiment.resume_run_id} from resume_checkpoint_path.")
+                break
 
     # It is possible to infer the name if resume_run_id is set or if resume_checkpoint_path is set. Otherwise, a random name is generated.
     if cfg.experiment.resume_run_id:
