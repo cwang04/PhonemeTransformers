@@ -60,6 +60,8 @@ class DatasetParams:
     # Remove utterances from the dataset produced by children
     remove_child_utterances: Optional[bool] = None
 
+    valid_size: Optional[int] = 10000
+
 
 @dataclass
 class TokenizerParams:

@@ -1,4 +1,4 @@
-name: 'transformersegmentation/CHILDES'
+name: 'phonemetransformers/CHILDES'
 subconfig: 'English'
 text_column: 'processed_gloss'
 is_phonemes: False

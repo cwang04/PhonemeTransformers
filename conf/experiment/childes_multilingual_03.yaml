@@ -1,14 +1,19 @@
 # @package _global_
 defaults:
   - base_experiment
-  - override /model: ??? # Must provide model
+  - override /model: "gpt2_5M"
+
+dataset:
+  subconfig: ??? # Must provide subconfig
+  valid_size: 1000
 
 experiment:
-  group: childes-size-english
-  evaluate_babyslm: True
+  group: childes-multilingual-5M
+  evaluate_babyslm: False
   evaluate_segmentation: True
 
 data_preprocessing:
+  subsample: 1800000
   subsample_type: 'tokens'
   max_input_length: 128
   join_utts: "static"

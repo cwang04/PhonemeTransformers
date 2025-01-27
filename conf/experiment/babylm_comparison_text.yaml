@@ -20,5 +20,5 @@ experiment:
   blimp_tasks: 'blimp_filtered,blimp_supplement'
 
 trainer:
-  eval_steps: 50_000 # Only evaluate every 25% of training since blimp is slow
-  save_steps: 50_000
+  eval_steps: 25_000 # Only evaluate every 25% of training since blimp is slow
+  save_steps: 25_000

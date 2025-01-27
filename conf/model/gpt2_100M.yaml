@@ -1,0 +1,9 @@
+name: 'gpt2_lm'
+
+model_kwargs: {
+  "n_layer": 16, 
+  "n_head": 12,
+  "n_embd": 768, 
+  "n_positions": 256,
+  "n_inner": 3072,
+}

@@ -21,9 +21,9 @@ from transformers.utils import get_full_repo_name, is_datasets_available
 
 from .config import TransformerSegmentationConfig
 from .datasampler import CustomBatchSampler
-from .evaluation.segmentation import GPT2FeaturesSegmenter, GPT2Segmenter
 from .evaluation.babyslm import babyslm_evaluation
 from .evaluation.blimp import blimp_evaluation
+from .evaluation.segmentation import GPT2FeaturesSegmenter, GPT2Segmenter
 
 SEGMENTER_MAP = {
     "GPT2LMHeadModel": GPT2Segmenter,
@@ -113,9 +113,7 @@ class CustomTrainer(Trainer):
                     revision=self.experiment_name,
                 )
             else:
-                raise ValueError(
-                    f"Could not clone the repo {repo_name} to {self.args.output_dir}."
-                )
+                raise ValueError(f"Could not clone the repo {repo_name} to {self.args.output_dir}.")
 
         self.hub_model_id = repo_url.repo_id
         try:
@@ -314,17 +312,17 @@ class CustomTrainer(Trainer):
                 metric_key_prefix,
                 start_time,
                 num_samples=output.num_samples,
-                num_steps=math.ceil(output.num_samples / total_batch_size), # type: ignore
-            ) # type: ignore
-        ) # type: ignore
+                num_steps=math.ceil(output.num_samples / total_batch_size),  # type: ignore
+            )  # type: ignore
+        )  # type: ignore
         self.log(metrics)
         self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, output.metrics)
         self._memory_tracker.stop_and_update_metrics(output.metrics)
 
         return output.metrics
-    
+
     def stride_evaluate(self, eval_dataloader, metric_key_prefix, stride: int = 2):
-        """ Evaluate perplexity on evaluation set with stride """
+        """Evaluate perplexity on evaluation set with stride"""
         # Create longs vector with all input ids and labels in eval_dataset
         long_input_ids = []
         for batch in eval_dataloader:
@@ -356,9 +354,7 @@ class CustomTrainer(Trainer):
             if end_loc == input_id_length:
                 # Ensure final set of input_ids is the same length as the rest
                 input_ids[-1] = torch.cat((input_ids[-1], torch.zeros(stride - trg_len, dtype=torch.long, device=self.args.device)))
-                target_ids[-1] = torch.cat(
-                    (target_ids[-1], torch.ones(stride - trg_len, dtype=torch.long, device=self.args.device) * -100)
-                )
+                target_ids[-1] = torch.cat((target_ids[-1], torch.ones(stride - trg_len, dtype=torch.long, device=self.args.device) * -100))
                 break
 
         # Ensure divisible by batch_size
@@ -394,11 +390,13 @@ class CustomTrainer(Trainer):
         return metrics
 
     def evaluate_segmentation(self, metric_key_prefix):
-        """ Evaluate segmentation on the evaluation sentences """
+        """Evaluate segmentation on the evaluation sentences"""
         metrics = {}
         model_class = self.model.__class__.__name__
         if model_class in SEGMENTER_MAP:
-            segmenter = SEGMENTER_MAP[model_class](self.model, self.tokenizer, self.segment_eval_sentences, batch_size=self.args.eval_batch_size)
+            segmenter = SEGMENTER_MAP[model_class](
+                self.model, self.tokenizer, self.segment_eval_sentences, batch_size=self.args.eval_batch_size
+            )
             best_cutoffs_type = {}
             best_cutoffs_boundary = {}
             for measure in tqdm(segmenter.measures, desc="Evaluating segmentation measures"):
@@ -406,47 +404,75 @@ class CustomTrainer(Trainer):
                 metrics[f"{metric_key_prefix}_spike_seg_type_fscore_{measure}"] = spike_seg_metrics["type_fscore"]
                 metrics[f"{metric_key_prefix}_spike_seg_boundary_fscore_{measure}"] = spike_seg_metrics["boundary_noedge_fscore"]
 
-                best_cutoffs_type[measure], type_fscore = segmenter.find_best_cutoff(measure, 'type_fscore')
+                best_cutoffs_type[measure], type_fscore = segmenter.find_best_cutoff(measure, "type_fscore")
                 metrics[f"{metric_key_prefix}_absolute_seg_type_fscore_{measure}"] = type_fscore
-                
-                best_cutoffs_boundary[measure], boundary_fscore = segmenter.find_best_cutoff(measure, 'boundary_noedge_fscore')
+
+                best_cutoffs_boundary[measure], boundary_fscore = segmenter.find_best_cutoff(measure, "boundary_noedge_fscore")
                 metrics[f"{metric_key_prefix}_absolute_seg_boundary_fscore_{measure}"] = boundary_fscore
 
             # Add majority vote measures based on type fscore votes
             segmenter.add_majority_vote(best_cutoffs_type)
-            metrics[f"{metric_key_prefix}_spike_seg_type_fscore_Majority Vote Cutoff"] = segmenter.evaluate_spike_segmentation('Majority Vote Cutoff')["type_fscore"]
-            metrics[f"{metric_key_prefix}_spike_seg_type_fscore_Majority Vote Spike"] = segmenter.evaluate_spike_segmentation('Majority Vote Spike')["type_fscore"]
-            metrics[f"{metric_key_prefix}_absolute_seg_type_fscore_Majority Vote Cutoff"] = segmenter.evaluate_cutoff_segmentation('Majority Vote Cutoff', 0.5)["type_fscore"]
-            metrics[f"{metric_key_prefix}_absolute_seg_type_fscore_Majority Vote Spike"] = segmenter.evaluate_cutoff_segmentation('Majority Vote Spike', 0.5)["type_fscore"]
+            metrics[f"{metric_key_prefix}_spike_seg_type_fscore_Majority Vote Cutoff"] = segmenter.evaluate_spike_segmentation(
+                "Majority Vote Cutoff"
+            )["type_fscore"]
+            metrics[f"{metric_key_prefix}_spike_seg_type_fscore_Majority Vote Spike"] = segmenter.evaluate_spike_segmentation(
+                "Majority Vote Spike"
+            )["type_fscore"]
+            metrics[f"{metric_key_prefix}_absolute_seg_type_fscore_Majority Vote Cutoff"] = segmenter.evaluate_cutoff_segmentation(
+                "Majority Vote Cutoff", 0.5
+            )["type_fscore"]
+            metrics[f"{metric_key_prefix}_absolute_seg_type_fscore_Majority Vote Spike"] = segmenter.evaluate_cutoff_segmentation(
+                "Majority Vote Spike", 0.5
+            )["type_fscore"]
 
             # Add majority vote measures based on boundary fscore votes
             segmenter.add_majority_vote(best_cutoffs_boundary)
-            metrics[f"{metric_key_prefix}_spike_seg_boundary_fscore_Majority Vote Cutoff"] = segmenter.evaluate_spike_segmentation('Majority Vote Cutoff')["boundary_noedge_fscore"]
-            metrics[f"{metric_key_prefix}_spike_seg_boundary_fscore_Majority Vote Spike"] = segmenter.evaluate_spike_segmentation('Majority Vote Spike')["boundary_noedge_fscore"]
-            metrics[f"{metric_key_prefix}_absolute_seg_boundary_fscore_Majority Vote Cutoff"] = segmenter.evaluate_cutoff_segmentation('Majority Vote Cutoff', 0.5)["boundary_noedge_fscore"]
-            metrics[f"{metric_key_prefix}_absolute_seg_boundary_fscore_Majority Vote Spike"] = segmenter.evaluate_cutoff_segmentation('Majority Vote Spike', 0.5)["boundary_noedge_fscore"]
+            metrics[f"{metric_key_prefix}_spike_seg_boundary_fscore_Majority Vote Cutoff"] = segmenter.evaluate_spike_segmentation(
+                "Majority Vote Cutoff"
+            )["boundary_noedge_fscore"]
+            metrics[f"{metric_key_prefix}_spike_seg_boundary_fscore_Majority Vote Spike"] = segmenter.evaluate_spike_segmentation(
+                "Majority Vote Spike"
+            )["boundary_noedge_fscore"]
+            metrics[f"{metric_key_prefix}_absolute_seg_boundary_fscore_Majority Vote Cutoff"] = segmenter.evaluate_cutoff_segmentation(
+                "Majority Vote Cutoff", 0.5
+            )["boundary_noedge_fscore"]
+            metrics[f"{metric_key_prefix}_absolute_seg_boundary_fscore_Majority Vote Spike"] = segmenter.evaluate_cutoff_segmentation(
+                "Majority Vote Spike", 0.5
+            )["boundary_noedge_fscore"]
         else:
             logging.warning(f"No segmenter available for model class {model_class}, skipping segmentation evaluation")
 
         return metrics
-    
+
     def evaluate_babyslm(self, metric_key_prefix):
-        """ Evaluate on BabySLM tasks """
+        """Evaluate on BabySLM tasks"""
         metrics = {}
         if self.is_phonemes:
-            metrics[f'{metric_key_prefix}_babyslm_lexical'] = babyslm_evaluation(self.model, self.tokenizer, Path(self.args.output_dir), 'lexical', self.args.eval_batch_size, self.is_phonemes)
+            metrics[f"{metric_key_prefix}_babyslm_test_lexical"] = babyslm_evaluation(
+                self.model, self.tokenizer, Path(self.args.output_dir), "lexical", self.args.eval_batch_size, self.is_phonemes
+            )
         else:
             logging.info("Not evaluating BabySLM lexical tasks as they are only supported for phoneme datasets")
-        metrics[f'{metric_key_prefix}_babyslm_syntactic'] = babyslm_evaluation(self.model, self.tokenizer, Path(self.args.output_dir), 'syntactic', self.args.eval_batch_size, self.is_phonemes)
+        metrics[f"{metric_key_prefix}_babyslm_test_syntactic"] = babyslm_evaluation(
+            self.model, self.tokenizer, Path(self.args.output_dir), "syntactic", self.args.eval_batch_size, self.is_phonemes
+        )
         return metrics
-    
+
     def evaluate_blimp(self, metric_key_prefix):
-        """ Evaluate on BLIMP tasks """
+        """Evaluate on BLIMP tasks"""
         metrics = {}
-        blimp_results = blimp_evaluation(self.model, self.tokenizer, Path(self.args.output_dir), self.args.eval_batch_size, self.blimp_tasks, self.args.device, self.is_phonemes)
+        blimp_results = blimp_evaluation(
+            self.model,
+            self.tokenizer,
+            Path(self.args.output_dir),
+            self.args.eval_batch_size,
+            self.blimp_tasks,
+            self.args.device,
+            self.is_phonemes,
+        )
         if "groups" in blimp_results:
             for key in blimp_results["groups"]:
-                metrics[f'{metric_key_prefix}_{key}'] = blimp_results["groups"][key]["acc,none"]
+                metrics[f"{metric_key_prefix}_{key}"] = blimp_results["groups"][key]["acc,none"]
         for key in blimp_results["results"]:
-            metrics[f'{metric_key_prefix}_{key}'] = blimp_results["results"][key]["acc,none"]
+            metrics[f"{metric_key_prefix}_{key}"] = blimp_results["results"][key]["acc,none"]
         return metrics

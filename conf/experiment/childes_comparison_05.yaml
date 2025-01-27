@@ -20,6 +20,3 @@ model:
     "embd_pdrop" : 0.5,
     "attn_pdrop" : 0.5,
   }
-
-trainer:
-  save_steps: 50_000

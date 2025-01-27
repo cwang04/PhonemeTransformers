@@ -246,7 +246,7 @@ def main(cfg: TransformerSegmentationConfig):
         save_strategy="steps",
         hub_strategy="every_save",
         push_to_hub=not cfg.experiment.offline_run,
-        hub_model_id=f"transformersegmentation/{cfg.experiment.group}-{cfg.model.name}-model" if not cfg.experiment.offline_run else None,
+        hub_model_id=f"phonemetransformers/{cfg.experiment.group}-{cfg.model.name}-model" if not cfg.experiment.offline_run else None,
         hub_token=os.environ["HF_WRITE_TOKEN"] if not cfg.experiment.offline_run else None,
         remove_unused_columns=True,
         label_names=["input_ids"],
@@ -289,9 +289,9 @@ def main(cfg: TransformerSegmentationConfig):
     else:
         trainer.train(resume_from_checkpoint=cfg.experiment.resume_checkpoint_path)
 
-    # Evaluate best model
-    trainer.stride_evaluation = 2
-    trainer.evaluate(metric_key_prefix="eval_best")
+        # Evaluate best model
+        trainer.stride_evaluation = 2
+        trainer.evaluate(metric_key_prefix="eval_best")
 
 
 if __name__ == "__main__":
