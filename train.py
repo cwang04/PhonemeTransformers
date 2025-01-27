@@ -293,6 +293,13 @@ def main(cfg: TransformerSegmentationConfig):
         trainer.stride_evaluation = 2
         trainer.evaluate(metric_key_prefix="eval_best")
 
+        # Push final model with tag
+        if not cfg.experiment.offline_run:
+            trainer.push_to_hub(
+                commit_message=f"Final model for experiment {cfg.experiment.name}",
+                tags=cfg.experiment.name,  # Can be a string or list of strings
+            )
+
 
 if __name__ == "__main__":
     main()
