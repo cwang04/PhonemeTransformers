@@ -8,6 +8,9 @@ dataset:
   subconfig: ??? # Must provide subconfig
   valid_size: 1000
 
+tokenizer:
+  name: ??? # Must provide tokenizer name
+
 experiment:
   group: childes-multilingual-5M
   evaluate_babyslm: False
