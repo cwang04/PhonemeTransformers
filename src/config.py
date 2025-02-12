@@ -26,6 +26,10 @@ class ExperimentParams:
     # Whether to evaluate the segmentation task
     evaluate_segmentation: bool = True
 
+    # Use a fixed subsample of tokens for the segmentation task
+    # (good for when different datasets are used)
+    segmentation_subsample: Optional[int] = None
+
     # Whether to evaluate the babyslm tasks
     evaluate_babyslm: bool = False
 

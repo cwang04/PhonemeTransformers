@@ -1,0 +1,29 @@
+# @package _global_
+# Best model for 180 thousand words
+defaults:
+  - base_experiment
+  - override /model: "gpt2_800k"
+
+dataset:
+  subconfig: ??? # Must provide subconfig
+  valid_size: 5000
+
+experiment:
+  group: childes-segmentation-800k
+  evaluate_babyslm: False
+  evaluate_segmentation: True
+  segmentation_subsample: 25000
+
+data_preprocessing:
+  subsample: 180000
+  subsample_type: 'tokens'
+  max_input_length: 128
+  join_utts: "static"
+  remove_word_boundaries: True
+
+model:
+  model_kwargs: {
+    "resid_pdrop" : 0.3,
+    "embd_pdrop" : 0.3,
+    "attn_pdrop" : 0.3,
+  }

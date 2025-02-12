@@ -55,6 +55,7 @@ class CustomTrainer(Trainer):
         # Evaluation parameters
         self.do_babyslm_evaluation = hydra_config.experiment.evaluate_babyslm
         self.segment_eval_sentences = segment_eval_sentences
+        self.segmentation_subsample = hydra_config.experiment.segmentation_subsample
         self.blimp_tasks = hydra_config.experiment.blimp_tasks
 
         self.experiment_group = hydra_config.experiment.group
@@ -322,7 +323,11 @@ class CustomTrainer(Trainer):
         model_class = self.model.__class__.__name__
         if model_class in SEGMENTER_MAP:
             segmenter = SEGMENTER_MAP[model_class](
-                self.model, self.tokenizer, self.segment_eval_sentences, batch_size=self.args.eval_batch_size
+                self.model,
+                self.tokenizer,
+                self.segment_eval_sentences,
+                batch_size=self.args.eval_batch_size,
+                subsample=self.segmentation_subsample,
             )
             best_cutoffs_type = {}
             best_cutoffs_boundary = {}

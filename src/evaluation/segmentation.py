@@ -6,10 +6,9 @@ import numpy as np
 import pandas as pd
 import torch
 from evaluate import load
-from torch.nn import CrossEntropyLoss
-import torch.nn.functional as F
-from tqdm import tqdm
 from scipy.optimize import minimize_scalar
+from torch.nn import CrossEntropyLoss
+from tqdm import tqdm
 
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -36,6 +35,7 @@ def segment_by_cutoff(data, measure, cutoff):
     segmented = " ".join("WORD_BOUNDARY " + p if m > cutoff else p for p, m in zip(data.Phoneme, data[measure])).strip()
     return segmented
 
+
 def segment_by_spike(data, measure):
     """Segments a sequence of phonemes by a given measure whenever there's a spike in the measure.
     Parameters
@@ -59,8 +59,9 @@ def segment_by_spike(data, measure):
     segmented = " ".join("WORD_BOUNDARY " + p if b else p for p, b in zip(data.Phoneme, boundaries)).strip()
     return segmented
 
+
 def get_gold_segmentation(data):
-    """ Extracts the gold segmentation from the data.
+    """Extracts the gold segmentation from the data.
     Parameters
     ----------
     data : pandas.DataFrame
@@ -77,8 +78,9 @@ def get_gold_segmentation(data):
     segmented = " ".join("WORD_BOUNDARY " + p if s else p for p, s in zip(data.Phoneme, data.Starts)).strip()
     return segmented.split(" UTT_BOUNDARY ")
 
+
 class Segmenter(object):
-    def __init__(self, model, tokenizer, utterances, max_sequence_length=64, batch_size=16, stride=10):
+    def __init__(self, model, tokenizer, utterances, max_sequence_length=64, batch_size=16, stride=10, subsample=10_000):
         """A class for segmenting utterances using a transformer model's phoneme predictions.
         Parameters
         ----------
@@ -94,17 +96,23 @@ class Segmenter(object):
             The batch size to use when extracting predictions from the model.
         stride : int
             The stride to use when extracting predictions from the model.
+        subsample : int
+            The number of tokens to subsample when extracting predictions from the model.
         """
         self.model = model
         self.tokenizer = tokenizer
-        
+
         self.max_sequence_length = max_sequence_length
         self.batch_size = batch_size
         self.stride = stride
+        self.subsample = subsample
 
         self.boundary_token = tokenizer.eos_token_id
 
-        utterances = [" ".join([p for p in utt.strip().split(" ") if p != ""]) for utt in utterances] # Remove empty phones
+        utterances = [" ".join([p for p in utt.strip().split(" ") if p != ""]) for utt in utterances]  # Remove empty phones
+
+        if self.subsample > sum([len(utt.split(" ")) - utt.count("WORD_BOUNDARY") for utt in utterances]):
+            raise ValueError(f"Subsample value of {self.subsample} is less than the number of tokens in the utterances.")
 
         # Process utterances and get gold segmentation
         self.processed_utterances = self.process_utterances(utterances)
@@ -112,7 +120,7 @@ class Segmenter(object):
 
         self.measures = self.processed_utterances.columns[:-3].tolist()
 
-        self.metric = load("transformersegmentation/segmentation_scores")
+        self.metric = load("phonemetransformers/segmentation_scores")
 
     def process_utterances(self, utterances):
         """Processes each utterance in `utterances` into a dataframe containing each phoneme (Phoneme) and phoneme position (Pos), whether or not a phoneme is the start of a word (Starts),
@@ -147,11 +155,16 @@ class Segmenter(object):
             phonemes.append("UTT_BOUNDARY")
             word_starts.append(False)
 
+        # Limit to num_tokens. Add a few extra since the first few predictions have little context, so we may want to discard them.
+        phonemes = phonemes[: self.subsample + self.max_sequence_length]
+        word_starts = word_starts[: self.subsample + self.max_sequence_length]
+
         data = self.get_uncertainties(phonemes)
         data["Pos"] = list(range(len(word_starts)))
         data["Starts"] = word_starts
         data["Phoneme"] = phonemes
-        return pd.DataFrame(data)
+        data = pd.DataFrame(data).iloc[-self.subsample :]
+        return data
 
     def get_uncertainties(self, phonemes):
         """Gets a variety of measures of prediction uncertainty at each point in the sequence,
@@ -172,7 +185,7 @@ class Segmenter(object):
 
     def evaluate_cutoff_segmentation(self, measure, cutoff, subsample=1):
         """Given a measure and a cutoff, segments by adding word boundaries whenever the measure is above the cutoff and evaluates the results.
-        
+
         Parameters
         ----------
         measure : str
@@ -194,7 +207,7 @@ class Segmenter(object):
 
         logging.debug("Segmented utterances using a cutoff of {} for measure: {}".format(cutoff, measure))
         return results
-    
+
     def find_best_cutoff(self, measure, score):
         """Given a measure and a score, finds the cutoff value that maximises the segmentation score.
 
@@ -214,10 +227,10 @@ class Segmenter(object):
         best_score : float
             The resulting score for segmentation.
         """
-        
+
         min, max = self.processed_utterances[measure].min(), self.processed_utterances[measure].max()
         fun = lambda x: -self.evaluate_cutoff_segmentation(measure=measure, cutoff=x, subsample=10)[score]
-        result = minimize_scalar(fun, bounds=(min, max), method='bounded')
+        result = minimize_scalar(fun, bounds=(min, max), method="bounded")
         logging.debug("Found best cutoff for measure {} using score {}: {}".format(measure, score, result.x))
         final_score = self.evaluate_cutoff_segmentation(measure=measure, cutoff=result.x)[score]
         return result.x, final_score
@@ -239,14 +252,14 @@ class Segmenter(object):
 
         logging.debug("Segmented utterances according to spikes in measure: {}".format(measure))
         return self.metric.compute(predictions=segmented_utterances, references=self.gold_utterances)
-    
+
     def add_majority_vote(self, measure_cutoffs):
-        """ Given a set of measures and their respective cutoff values, calculates two types of majority votes
+        """Given a set of measures and their respective cutoff values, calculates two types of majority votes
         and adds them to the processed_utterance data.
-        
+
         * The Majority Vote Cutoff measure indicates how many measures exceed their respective cutoffs at each position.
         * The Majority Vote Spike measure indicates how many measures spike at each position.
-        
+
         These measures are then normalised so that a vote above 0.5 indicates that the majority of measures agree.
 
         Parameters
@@ -255,20 +268,23 @@ class Segmenter(object):
             A dictionary containing the measure names as keys and their respective cutoff values as values.
         """
 
-        self.processed_utterances['Majority Vote Cutoff'] = 0
-        self.processed_utterances['Majority Vote Spike'] = 0
+        self.processed_utterances["Majority Vote Cutoff"] = 0
+        self.processed_utterances["Majority Vote Spike"] = 0
         for measure, cutoff in measure_cutoffs.items():
-            self.processed_utterances['Majority Vote Cutoff'] += (self.processed_utterances[measure] > cutoff).astype(int)
+            self.processed_utterances["Majority Vote Cutoff"] += (self.processed_utterances[measure] > cutoff).astype(int)
             shift_left = self.processed_utterances[measure].shift(1)
             shift_right = self.processed_utterances[measure].shift(-1)
-            self.processed_utterances['Majority Vote Spike'] += ((self.processed_utterances[measure] > shift_left) & (self.processed_utterances[measure] > shift_right)).astype(int)
+            self.processed_utterances["Majority Vote Spike"] += (
+                (self.processed_utterances[measure] > shift_left) & (self.processed_utterances[measure] > shift_right)
+            ).astype(int)
         num_measures = len(measure_cutoffs)
-        self.processed_utterances['Majority Vote Cutoff'] /= num_measures
-        self.processed_utterances['Majority Vote Spike'] /= num_measures
+        self.processed_utterances["Majority Vote Cutoff"] /= num_measures
+        self.processed_utterances["Majority Vote Spike"] /= num_measures
+
 
 class GPT2Segmenter(Segmenter):
     def get_uncertainties(self, phonemes):
-        """ Gets a variety of measures of prediction uncertainty at each point in the sequence,
+        """Gets a variety of measures of prediction uncertainty at each point in the sequence,
             extracted from a GPT2 model.
 
         Parameters
@@ -282,13 +298,13 @@ class GPT2Segmenter(Segmenter):
             A dictionary containing a variety of measures of prediction uncertainty at each point in the sequence.
         """
 
-        # Prepare token ids tensor and get logits. We add a boundary token at the beginning 
+        # Prepare token ids tensor and get logits. We add a boundary token at the beginning
         # to get the prediction for the first phoneme and we discard the last prediction.
         token_ids = [self.boundary_token] + self.tokenizer.convert_tokens_to_ids(phonemes)
         long_input_ids = torch.tensor(token_ids, dtype=torch.long).to(DEFAULT_DEVICE)
-        logits = self.get_logits(long_input_ids)[:len(token_ids) - 1]
+        logits = self.get_logits(long_input_ids)[: len(token_ids) - 1]
 
-        logging.info(f'Computing uncertainty measures...')
+        logging.info(f"Computing uncertainty measures...")
         loss_fct = CrossEntropyLoss(reduction="none")
         loss = loss_fct(logits, long_input_ids[1:]).detach().cpu().numpy()
         increase_in_loss = np.insert(loss[1:] - loss[:-1], 0, 0)
@@ -312,12 +328,12 @@ class GPT2Segmenter(Segmenter):
         return uncertainties
 
     def get_logits(self, long_input_ids):
-        """ Gets logits by running the model on the long vector of phonemes.
+        """Gets logits by running the model on the long vector of phonemes.
         Parameters
         ----------
         long_input_ids : torch.Tensor
             A tensor of token ids.
-        
+
         Returns
         -------
         logits : torch.Tensor
@@ -328,9 +344,9 @@ class GPT2Segmenter(Segmenter):
             return self.get_logits_individual(long_input_ids)
         else:
             return self.get_logits_stride(long_input_ids)
-    
+
     def get_logits_individual(self, long_input_ids):
-        """ Gets logits by running the model on each utterance individually, which is faster but provides less context for early predictions. 
+        """Gets logits by running the model on each utterance individually, which is faster but provides less context for early predictions.
         Parameters
         ----------
         long_input_ids : torch.Tensor
@@ -342,14 +358,18 @@ class GPT2Segmenter(Segmenter):
             A tensor of logits.
         """
 
-        logging.info(f'Extracting logits for all {len(long_input_ids)} phonemes in segmentation set by feeding in each utterance to the model individually...')
+        logging.info(
+            f"Extracting logits for all {len(long_input_ids)} phonemes in segmentation set by feeding in each utterance to the model individually..."
+        )
 
         input_ids = []
         input_id_length = len(long_input_ids)
         prev = 0
         for begin_loc in range(1, len(long_input_ids)):
             if long_input_ids[begin_loc] == self.boundary_token:
-                inputs = long_input_ids[prev:begin_loc+1].to(DEFAULT_DEVICE) # Include both utterance boundaries for every input. We remove the last prediction later.
+                inputs = long_input_ids[prev : begin_loc + 1].to(
+                    DEFAULT_DEVICE
+                )  # Include both utterance boundaries for every input. We remove the last prediction later.
                 input_ids.append(inputs)
                 prev = begin_loc
         if prev < input_id_length:
@@ -358,16 +378,18 @@ class GPT2Segmenter(Segmenter):
 
         # Feed in each utterance individually (could pad and batch to make quicker)
         logits = []
-        logging.info('Extracting logits...')
+        logging.info("Extracting logits...")
         for inputs in tqdm(input_ids):
             with torch.no_grad():
                 outputs = self.model(inputs.unsqueeze(0)).logits.detach()
-                logits.append(outputs[0][:-1]) # Remove the last prediction here. This ensures we have one prediction per phoneme in the long_input_ids tensor.
+                logits.append(
+                    outputs[0][:-1]
+                )  # Remove the last prediction here. This ensures we have one prediction per phoneme in the long_input_ids tensor.
 
         return torch.cat(logits)
 
     def get_logits_stride(self, long_input_ids):
-        """ Gets logits by running the model on the long vector of phonemes, shifting by a stride to provide maximum context.
+        """Gets logits by running the model on the long vector of phonemes, shifting by a stride to provide maximum context.
         Parameters
         ----------
         long_input_ids : torch.Tensor
@@ -379,7 +401,9 @@ class GPT2Segmenter(Segmenter):
             A tensor of logits.
         """
 
-        logging.info(f'Extracting logits for all {len(long_input_ids)} phonemes in segmentation set using stride {self.stride} and max length {self.max_sequence_length}...')
+        logging.info(
+            f"Extracting logits for all {len(long_input_ids)} phonemes in segmentation set using stride {self.stride} and max length {self.max_sequence_length}..."
+        )
 
         # Batch the input ids and labels into sequences of length max_length by shifting by stride
         input_ids = []
@@ -392,13 +416,15 @@ class GPT2Segmenter(Segmenter):
                 break
 
         # Pad final stride with 0s
-        input_ids[-1] = torch.cat((input_ids[-1], torch.zeros(self.max_sequence_length - len(input_ids[-1]), dtype=torch.long).to(DEFAULT_DEVICE)))
+        input_ids[-1] = torch.cat(
+            (input_ids[-1], torch.zeros(self.max_sequence_length - len(input_ids[-1]), dtype=torch.long).to(DEFAULT_DEVICE))
+        )
 
         # Ensure divisible by batch_size
         while len(input_ids) % self.batch_size != 0:
             input_ids.append(torch.zeros_like(input_ids[0]))
 
-         # Stack into batches of batch_size
+        # Stack into batches of batch_size
         input_ids = torch.stack(input_ids)
         input_ids = input_ids.view(-1, self.batch_size, self.max_sequence_length)
         seq_len = input_ids.size(0)
@@ -406,7 +432,7 @@ class GPT2Segmenter(Segmenter):
         # Get logits from each batch and concatenate them
         logits = []
         first = True
-        logging.info('Extracting logits...')
+        logging.info("Extracting logits...")
         for i in tqdm(range(seq_len)):
             with torch.no_grad():
                 outputs = self.model(input_ids[i]).logits.detach()
@@ -416,9 +442,10 @@ class GPT2Segmenter(Segmenter):
                         first = False
                     else:
                         # After the first batch, we only want the last stride tokens (which are newly predicted)
-                        logits = torch.cat((logits, outputs[batch][-self.stride:]))
+                        logits = torch.cat((logits, outputs[batch][-self.stride :]))
 
         return logits
+
 
 class GPT2FeaturesSegmenter(GPT2Segmenter):
     def get_uncertainties(self, phonemes):
@@ -445,7 +472,7 @@ class GPT2FeaturesSegmenter(GPT2Segmenter):
         # Prepare token ids tensor
         token_ids = [self.boundary_token] + self.tokenizer.convert_tokens_to_ids(phonemes)
         long_input_ids = torch.tensor(token_ids, dtype=torch.long).to(DEFAULT_DEVICE)
-        logits = self.get_logits(long_input_ids)[:len(token_ids) - 1] # Remove the last prediction. May be longer due to padding.
+        logits = self.get_logits(long_input_ids)[: len(token_ids) - 1]  # Remove the last prediction. May be longer due to padding.
         logits = logits.permute(1, 2, 0)
 
         # For this model, we get a loss per feature, per position

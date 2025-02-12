@@ -1,4 +1,5 @@
 # @package _global_
+# Best model for 1.8M words
 defaults:
   - base_experiment
   - override /model: "gpt2_5M"

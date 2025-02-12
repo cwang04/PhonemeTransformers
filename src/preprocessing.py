@@ -53,8 +53,10 @@ UNK_FEATURE_VEC = [0] * len(FEATURES) + [2]
 
 PHOIBLE_PATH = "data/phoible.csv"
 
+TONE_SYMBOLS = "˥˩̰˨˥˩˧˦"
 
-def create_phoneme_map(tokenizer, phoible_data_path=PHOIBLE_PATH):
+
+def create_phoneme_map(tokenizer, phoible_data_path=PHOIBLE_PATH, convert_to_numeric=True):
     """
     Creates a map from tokenizer IDs to features.
     """
@@ -63,17 +65,30 @@ def create_phoneme_map(tokenizer, phoible_data_path=PHOIBLE_PATH):
     phoneme_map = {}
 
     for phoneme, id in tokenizer.vocab.items():
+        for char in phoneme:
+            if char in TONE_SYMBOLS:
+                phoneme = phoneme.replace(char, "")
+
         row = phoible[phoible["Phoneme"] == phoneme][FEATURES]
 
-        # Convert features to a vector of 0s, 1s, and 2s
-        if row.shape[0] != 0:
-            features = [1 if f == "-" else 2 if f == "+" else 0 for f in row.values[0]] + [0]
-        elif phoneme in ["WORD_BOUNDARY", "UTT_BOUNDARY"]:
-            features = BOUNDARY_FEATURE_VEC
-        elif phoneme in ["PAD", "EOS", "BOS"]:
-            features = PAD_FEATURE_VEC
+        if convert_to_numeric:
+            if row.shape[0] != 0:
+                features = [1 if f == "-" else 2 if f == "+" else 0 for f in row.values[0]] + [0]
+            elif phoneme in ["WORD_BOUNDARY", "UTT_BOUNDARY"]:
+                features = BOUNDARY_FEATURE_VEC
+            elif phoneme in ["PAD", "EOS", "BOS"]:
+                features = PAD_FEATURE_VEC
+            else:
+                features = UNK_FEATURE_VEC
         else:
-            features = UNK_FEATURE_VEC
+            if row.shape[0] != 0:
+                features = row.values[0].tolist() + ["0"]
+            elif phoneme in ["WORD_BOUNDARY", "UTT_BOUNDARY"]:
+                features = ["0"] * len(FEATURES) + ["-"]
+            elif phoneme in ["PAD", "EOS", "BOS"]:
+                features = ["0"] * len(FEATURES) + ["0"]
+            else:
+                features = ["0"] * len(FEATURES) + ["+"]
         phoneme_map[id] = features
     return phoneme_map
 

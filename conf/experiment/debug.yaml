@@ -8,6 +8,8 @@ experiment:
   group: debug
   dry_run: True
   offline_run: True
+  evaluate_segmentation: True
+  segmentation_subsample: 30000
 
 dataset:
   max_age: null # Default is 120, but filtering take a few minutes which is annoying when debugging.

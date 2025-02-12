@@ -171,6 +171,7 @@ def main(cfg: TransformerSegmentationConfig):
         logger.info(f"Running in dry run mode -- subsampling dataset by {DRY_RUN_SUBSAMPLE_FACTOR}x")
         dataset["train"] = dataset["train"].select(range(0, dataset["train"].num_rows, DRY_RUN_SUBSAMPLE_FACTOR))
         dataset["valid"] = dataset["valid"].select(range(0, dataset["valid"].num_rows, DRY_RUN_SUBSAMPLE_FACTOR))
+        cfg.experiment.segmentation_subsample = cfg.experiment.segmentation_subsample // DRY_RUN_SUBSAMPLE_FACTOR
 
     logger.info("Loading tokenizer")
     tokenizer = setup.load_tokenizer(cfg.tokenizer)
