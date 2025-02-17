@@ -58,7 +58,7 @@ class DatasetParams:
     # Whether the data consists of phonemes
     is_phonemes: bool = False
 
-    # Max age of child
+    # Max age of child (in months)
     max_age: Optional[int] = None
 
     # Remove utterances from the dataset produced by children

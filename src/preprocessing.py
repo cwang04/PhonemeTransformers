@@ -153,11 +153,11 @@ class DataPreprocessor(object):
                 word_starts = np.zeros(len(input_ids), dtype=bool)
                 word_starts[word_start_positions] = True
                 # Every position after a word boundary is also a word start
-                word_starts = np.logical_or(word_starts, np.array([False] + input_ids[:-1] == self.word_boundary_token))
+                word_starts = np.logical_or(word_starts, np.array([0] + input_ids[:-1]) == self.word_boundary_token)
+                # Every position after an utterance boundary is a word start
+                word_starts = np.logical_or(word_starts, np.array([0] + input_ids[:-1]) == self.tokenizer.eos_token_id)
                 # Utterance boundaries are not word boundaries
-                word_starts = np.logical_and(word_starts, np.array(input_ids) != self.utterance_boundary_token)
-                # But the first token is always a word start
-                word_starts[0] = True
+                word_starts = np.logical_and(word_starts, np.array(input_ids) != self.tokenizer.eos_token_id)
 
             if self.remove_word_boundaries:
                 mask = np.where(np.array(input_ids) != self.word_boundary_token)
@@ -199,8 +199,12 @@ class DataPreprocessor(object):
 
                 word_starts = np.zeros(len(input_ids), dtype=np.int8)
                 word_starts[word_start_positions] = 1
+                # Every position after a word boundary is also a word start
+                word_starts = np.logical_or(word_starts, np.array([0] + input_ids[:-1]) == self.word_boundary_token)
+                # Every position after an utterance boundary is a word start
+                word_starts = np.logical_or(word_starts, np.array([0] + input_ids[:-1]) == self.tokenizer.eos_token_id)
                 word_starts = np.logical_and(
-                    word_starts, np.array(input_ids) != self.utterance_boundary_token
+                    word_starts, np.array(input_ids) != self.eos_token_id
                 )  # Utterance boundaries are not word boundaries
                 word_starts[0] = 1  # First token is always a word start
                 word_starts_list.append(word_starts)
