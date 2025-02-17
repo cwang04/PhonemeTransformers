@@ -185,10 +185,6 @@ def main(cfg: TransformerSegmentationConfig):
     logger.info("Initializing model")
     model = load_model(cfg.model, tokenizer)
 
-    # Get a sample of the validation set for evaluating segmentation. We do this before preprocessing because
-    # preprocessing removes word boundaries, which we need as labels for evaluation.
-    segment_eval_sentences = dataset["valid"]["text"] if cfg.experiment.evaluate_segmentation else None
-
     # Subsample words before tokenization as this may remove word boundaries
     if cfg.data_preprocessing.subsample is not None and cfg.data_preprocessing.subsample_type == "words":
         logger.info(f"Subsampling dataset to {cfg.data_preprocessing.subsample} {cfg.data_preprocessing.subsample_type}")
@@ -260,7 +256,6 @@ def main(cfg: TransformerSegmentationConfig):
     # Set up trainer
     trainer = CustomTrainer(
         hydra_config=cfg,
-        segment_eval_sentences=segment_eval_sentences,
         model=model,
         args=training_args,
         train_dataset=train_dataset,

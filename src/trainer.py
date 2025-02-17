@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 # typing imports
-from typing import List, Optional
+from typing import Optional
 
 import torch
 from torch.utils.data import BatchSampler, DataLoader, Dataset
@@ -33,7 +33,6 @@ class CustomTrainer(Trainer):
     def __init__(
         self,
         hydra_config: TransformerSegmentationConfig,
-        segment_eval_sentences: Optional[List[str]] = None,
         is_phonemes: bool = False,
         **kwargs,
     ) -> None:
@@ -45,7 +44,7 @@ class CustomTrainer(Trainer):
 
         Args:
             * hydra_config: (BabyLMConfig): The config object.
-            * segment_eval_sentences: (List[str]): The sentences to evaluate segmentation on.
+            * is_phonemes (bool): Whether the dataset is phonemes or not.
         """
 
         self.hydra_config = hydra_config
@@ -54,7 +53,7 @@ class CustomTrainer(Trainer):
 
         # Evaluation parameters
         self.do_babyslm_evaluation = hydra_config.experiment.evaluate_babyslm
-        self.segment_eval_sentences = segment_eval_sentences
+        self.do_segmentation_evaluation = hydra_config.experiment.evaluate_segmentation
         self.segmentation_subsample = hydra_config.experiment.segmentation_subsample
         self.blimp_tasks = hydra_config.experiment.blimp_tasks
 
@@ -196,6 +195,7 @@ class CustomTrainer(Trainer):
         # memory metrics - must set up as early as possible
         self._memory_tracker.start()
 
+        eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
         start_time = time.time()
 
@@ -223,8 +223,8 @@ class CustomTrainer(Trainer):
         if self.stride_evaluation != 0:
             metrics.update(self.stride_evaluate(eval_dataloader, metric_key_prefix, stride=self.stride_evaluation))
 
-        if self.segment_eval_sentences:
-            metrics.update(self.evaluate_segmentation(metric_key_prefix))
+        if self.do_segmentation_evaluation:
+            metrics.update(self.evaluate_segmentation(eval_dataset, metric_key_prefix))
 
         if self.do_babyslm_evaluation:
             metrics.update(self.evaluate_babyslm(metric_key_prefix))
@@ -317,7 +317,7 @@ class CustomTrainer(Trainer):
         metrics[f"{metric_key_prefix}_stride_bpc"] = bpc.item()
         return metrics
 
-    def evaluate_segmentation(self, metric_key_prefix):
+    def evaluate_segmentation(self, eval_dataset=None, metric_key_prefix: str = "eval"):
         """Evaluate segmentation on the evaluation sentences"""
         metrics = {}
         model_class = self.model.__class__.__name__
@@ -325,7 +325,7 @@ class CustomTrainer(Trainer):
             segmenter = SEGMENTER_MAP[model_class](
                 self.model,
                 self.tokenizer,
-                self.segment_eval_sentences,
+                eval_dataset,
                 batch_size=self.args.eval_batch_size,
                 subsample=self.segmentation_subsample,
             )

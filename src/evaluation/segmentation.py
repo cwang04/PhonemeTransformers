@@ -80,7 +80,7 @@ def get_gold_segmentation(data):
 
 
 class Segmenter(object):
-    def __init__(self, model, tokenizer, utterances, max_sequence_length=64, batch_size=16, stride=10, subsample=10_000):
+    def __init__(self, model, tokenizer, eval_dataset, max_sequence_length=64, batch_size=16, stride=10, subsample=10_000):
         """A class for segmenting utterances using a transformer model's phoneme predictions.
         Parameters
         ----------
@@ -88,8 +88,8 @@ class Segmenter(object):
             A transformer model.
         tokenizer : AutoTokenizer
             A tokenizer for the model.
-        utterances : list
-            A list of utterances to segment.
+        eval_dataset : list
+            A pandas DataFrame containing input_ids and word_starts for each utterance.
         max_sequence_length : int
             The maximum sequence length to use when extracting predictions from the model.
         batch_size : int
@@ -109,27 +109,22 @@ class Segmenter(object):
 
         self.boundary_token = tokenizer.eos_token_id
 
-        utterances = [" ".join([p for p in utt.strip().split(" ") if p != ""]) for utt in utterances]  # Remove empty phones
-
-        if self.subsample > sum([len(utt.split(" ")) - utt.count("WORD_BOUNDARY") for utt in utterances]):
-            raise ValueError(f"Subsample value of {self.subsample} is less than the number of tokens in the utterances.")
-
         # Process utterances and get gold segmentation
-        self.processed_utterances = self.process_utterances(utterances)
+        self.processed_utterances = self.process_utterances(eval_dataset)
         self.gold_utterances = get_gold_segmentation(self.processed_utterances)
 
-        self.measures = self.processed_utterances.columns[:-3].tolist()
+        self.measures = self.processed_utterances.columns[:-4].tolist()
 
         self.metric = load("phonemetransformers/segmentation_scores")
 
-    def process_utterances(self, utterances):
+    def process_utterances(self, eval_dataset):
         """Processes each utterance in `utterances` into a dataframe containing each phoneme (Phoneme) and phoneme position (Pos), whether or not a phoneme is the start of a word (Starts),
         and a variety of measures of prediction uncertainty at each point in the sequence (Entropy, Increase in Entropy, Loss, Increase in Loss, Rank, Increase in Rank).
         Parameters
         ----------
-        utterances : list of str
-            A list of space-separated string of phones with 'WORD_BOUNDARY' used to indicate word boundaries.
-            E.g. 'w ʌ t WORD_BOUNDARY dʒ ʌ s t WORD_BOUNDARY h æ p ə n d WORD_BOUNDARY d æ d i WORD_BOUNDARY'.
+        eval_dataset : pandas.DataFrame
+            A dataframe containing input_ids and word_starts for each utterance. Can be batched or not.
+            UTT_BOUNDARY tokens are used to separate utterances.
 
         Returns
         -------
@@ -138,32 +133,26 @@ class Segmenter(object):
             and a variety of measures of prediction uncertainty at each point in the sequence, depending on the model.
         """
 
-        phonemes = []
-        word_starts = []
-        next_word = True
-        for utterance in utterances:
-            processed = utterance.split(" ")
-            for c in processed:
-                if c == " ":
-                    continue
-                if c == "WORD_BOUNDARY":
-                    next_word = True
-                else:
-                    phonemes.append(c)
-                    word_starts.append(next_word)
-                    next_word = False
-            phonemes.append("UTT_BOUNDARY")
-            word_starts.append(False)
+        # eval_dataset['input_ids'] contains batches of input ids. Join them into one long list.
+        input_ids = [i for batch in eval_dataset["input_ids"] for i in batch]
+        word_starts = [s for batch in eval_dataset["word_starts"] for s in batch]
+        phonemes = self.tokenizer.convert_ids_to_tokens(input_ids)
 
-        # Limit to num_tokens. Add a few extra since the first few predictions have little context, so we may want to discard them.
+        if self.subsample > len(input_ids):
+            raise ValueError(f"Subsample value of {self.subsample} is less than the number of tokens in the segmentation evaluation set.")
+
         phonemes = phonemes[: self.subsample + self.max_sequence_length]
         word_starts = word_starts[: self.subsample + self.max_sequence_length]
+        input_ids = input_ids[: self.subsample + self.max_sequence_length]
 
         data = self.get_uncertainties(phonemes)
         data["Pos"] = list(range(len(word_starts)))
         data["Starts"] = word_starts
         data["Phoneme"] = phonemes
+        data["ID"] = input_ids
         data = pd.DataFrame(data).iloc[-self.subsample :]
+        while data["Phoneme"].iloc[0] == 'UTT_BOUNDARY':
+            data = data.iloc[1:]
         return data
 
     def get_uncertainties(self, phonemes):
