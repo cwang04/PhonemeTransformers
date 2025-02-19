@@ -1,0 +1,6 @@
+name: 'phonemetransformers/random'
+subconfig: 'Uniform'
+text_column: 'phonemized_utterance'
+is_phonemes: True
+max_age: 120
+remove_child_utterances: True
