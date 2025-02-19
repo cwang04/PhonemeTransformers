@@ -138,19 +138,23 @@ class Segmenter(object):
         word_starts = [s for batch in eval_dataset["word_starts"] for s in batch]
         phonemes = self.tokenizer.convert_ids_to_tokens(input_ids)
 
-        if self.subsample > len(input_ids):
-            raise ValueError(f"Subsample value of {self.subsample} is less than the number of tokens in the segmentation evaluation set.")
+        if self.subsample:
+            if self.subsample > len(input_ids):
+                raise ValueError(f"Subsample value of {self.subsample} is less than the number of tokens in the segmentation evaluation set.")
 
-        phonemes = phonemes[: self.subsample + self.max_sequence_length]
-        word_starts = word_starts[: self.subsample + self.max_sequence_length]
-        input_ids = input_ids[: self.subsample + self.max_sequence_length]
+            phonemes = phonemes[: self.subsample + self.max_sequence_length]
+            word_starts = word_starts[: self.subsample + self.max_sequence_length]
+            input_ids = input_ids[: self.subsample + self.max_sequence_length]
 
         data = self.get_uncertainties(phonemes)
         data["Pos"] = list(range(len(word_starts)))
         data["Starts"] = word_starts
         data["Phoneme"] = phonemes
         data["ID"] = input_ids
-        data = pd.DataFrame(data).iloc[-self.subsample :]
+
+        if self.subsample:
+            data = pd.DataFrame(data).iloc[-self.subsample :]
+        
         while data["Phoneme"].iloc[0] == 'UTT_BOUNDARY':
             data = data.iloc[1:]
         return data

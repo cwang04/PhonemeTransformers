@@ -16,6 +16,7 @@ experiment:
   group: childes-segmentation-random
   evaluate_babyslm: False
   evaluate_segmentation: True
+  segmentation_subsample: 25000
 
 data_preprocessing:
   subsample: 1800000
