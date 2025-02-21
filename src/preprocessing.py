@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import re
 from transformers import PreTrainedTokenizer
 
 from .config import DataPreprocessingParams
@@ -54,7 +55,7 @@ UNK_FEATURE_VEC = [0] * len(FEATURES) + [2]
 PHOIBLE_PATH = "data/phoible.csv"
 
 TONE_SYMBOLS = "˥˩̰˨˥˩˧˦"
-
+STRESS_RE = re.compile(r"[ˈˌ'-]+")
 
 def create_phoneme_map(tokenizer, phoible_data_path=PHOIBLE_PATH, convert_to_numeric=True):
     """
@@ -68,8 +69,15 @@ def create_phoneme_map(tokenizer, phoible_data_path=PHOIBLE_PATH, convert_to_num
         for char in phoneme:
             if char in TONE_SYMBOLS:
                 phoneme = phoneme.replace(char, "")
+        
+        stressed_phoneme = False
+        if STRESS_RE.match(phoneme):
+            phoneme = STRESS_RE.sub("", phoneme)
+            stressed_phoneme = True
 
         row = phoible[phoible["Phoneme"] == phoneme][FEATURES]
+        if stressed_phoneme:
+            row["stress"] = "+"
 
         if convert_to_numeric:
             if row.shape[0] != 0:
