@@ -71,7 +71,7 @@ def create_phoneme_map(tokenizer, phoible_data_path=PHOIBLE_PATH, convert_to_num
                 phoneme = phoneme.replace(char, "")
         
         stressed_phoneme = False
-        if STRESS_RE.match(phoneme):
+        if STRESS_RE.findall(phoneme):
             phoneme = STRESS_RE.sub("", phoneme)
             stressed_phoneme = True
 
