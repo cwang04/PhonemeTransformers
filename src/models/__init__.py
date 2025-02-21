@@ -39,7 +39,8 @@ def load_model(
             if cfg.name == 'gpt2_feature_lm':
                 phoneme_map = create_phoneme_map(tokenizer)
                 model = MODEL_REGISTRY[cfg.name](config, phoneme_map)
-            model = MODEL_REGISTRY[cfg.name](config)
+            else:
+                model = MODEL_REGISTRY[cfg.name](config)
     else:
         raise ValueError(f"Model {cfg.name} not found in registry")
     
