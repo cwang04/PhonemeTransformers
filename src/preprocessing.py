@@ -124,9 +124,9 @@ class DataPreprocessor(object):
         self.utterance_boundary_token = tokenizer.eos_token
         self.get_word_boundaries = get_word_boundaries
         if self.get_word_boundaries or self.remove_word_boundaries:
-            if "WORD_BOUNDARY" in tokenizer.get_added_vocab():
+            if "WORD_BOUNDARY" in tokenizer.get_vocab():
                 self.word_boundary_token = tokenizer.convert_tokens_to_ids("WORD_BOUNDARY")
-            elif "W" in tokenizer.get_added_vocab():
+            elif "W" in tokenizer.get_vocab():
                 self.word_boundary_token = tokenizer.convert_tokens_to_ids("W")
             else:
                 raise ValueError(

@@ -30,7 +30,7 @@ def blimp_evaluation(model, tokenizer, model_path, batch_size, tasks, device, is
         tasks=task_names,
         num_fewshot=0,
         task_manager=task_manager,
-        batch_size='auto',
+        batch_size=batch_size,
         device=device,
     )
 

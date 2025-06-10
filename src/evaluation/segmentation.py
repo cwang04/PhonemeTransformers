@@ -151,9 +151,10 @@ class Segmenter(object):
         data["Starts"] = word_starts
         data["Phoneme"] = phonemes
         data["ID"] = input_ids
+        data = pd.DataFrame(data)
 
         if self.subsample:
-            data = pd.DataFrame(data).iloc[-self.subsample :]
+            data = data.iloc[-self.subsample :]
         
         while data["Phoneme"].iloc[0] == 'UTT_BOUNDARY':
             data = data.iloc[1:]
@@ -415,7 +416,7 @@ class GPT2Segmenter(Segmenter):
 
         # Ensure divisible by batch_size
         while len(input_ids) % self.batch_size != 0:
-            input_ids.append(torch.zeros_like(input_ids[0]))
+            input_ids.append(torch.zeros_like(input_ids[0]).to(DEFAULT_DEVICE))
 
         # Stack into batches of batch_size
         input_ids = torch.stack(input_ids)
