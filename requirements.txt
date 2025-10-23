@@ -13,3 +13,5 @@ seaborn==0.12.2
 scikit-learn==1.2.2
 transformers==4.27.4
 wandb==0.14.0
+pyarrow<13,>==8.0.0
+lm-eval==0.4.0
