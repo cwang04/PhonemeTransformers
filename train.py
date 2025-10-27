@@ -198,7 +198,7 @@ def main(cfg: TransformerSegmentationConfig):
     processed_dataset = dataset.map(
         data_preprocessor,
         batched=True,
-        num_proc=(64 if torch.cuda.is_available() else 1),
+        num_proc=(8 if torch.cuda.is_available() else 1),
         remove_columns=["text"],
     )
     train_dataset = processed_dataset["train"]
