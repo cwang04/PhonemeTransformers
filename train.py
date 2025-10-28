@@ -228,7 +228,7 @@ def main(cfg: TransformerSegmentationConfig):
         do_train=True,
         do_eval=True,
         do_predict=False,
-        eval_strategy="steps",
+        evaluation_strategy="steps",
         per_device_train_batch_size=cfg.trainer.batch_size,  # NOTE: We can should maybe use auto_find_batch_size
         per_device_eval_batch_size=cfg.trainer.batch_size,
         learning_rate=cfg.trainer.lr,
